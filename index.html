@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Records System</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
+    <style>
+        :root {
+            --primary: #00A2E2;
+            --secondary: #2980b9;
+            --success: #2ecc71;
+            --danger: #e74c3c;
+            --light: #ecf0f1;
+            --dark: #34495e;
+            --gray: #95a5a6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f5f7fa;
+            color: var(--dark);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .info-section {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .personal-info,
+        .medical-info {
+            flex: 1;
+            min-width: 300px;
+            padding: 20px;
+        }
+
+        .info-row {
+            display: flex;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .info-label {
+            font-weight: bold;
+            width: 180px;
+            color: var(--dark);
+        }
+
+        .info-value {
+            flex: 1;
+        }
+
+        .status-badge {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .status-true {
+            background: var(--danger);
+            color: white;
+        }
+
+        .status-false {
+            background: var(--success);
+            color: white;
+        }
+
+        .search-container {
+            padding: 15px 20px;
+            background: #f0f0f0;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+            color: var(--gray);
+        }
+
+        @media (max-width: 600px) {
+            .info-label {
+                width: 100%;
+                margin-bottom: 5px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>CardoCare</h1>
+        </header>
+
+        <div class="search-container">
+            <input type="text" class="search-input" id="patient-search" placeholder="Search by ID, name, phone or national ID...">
+        </div>
+
+        <div class="info-section">
+            <div class="personal-info">
+                <h2>Personal Information</h2>
+                <div class="info-row">
+                    <div class="info-label">Patient ID:</div>
+                    <div class="info-value" id="patient-id">-</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Full Name:</div>
+                    <div class="info-value" id="full-name">-</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Email:</div>
+                    <div class="info-value" id="email">-</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Phone:</div>
+                    <div class="info-value" id="phone">-</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">National ID:</div>
+                    <div class="info-value" id="national-id">-</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Gender:</div>
+                    <div class="info-value" id="gender">-</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Address:</div>
+                    <div class="info-value" id="address">-</div>
+                </div>
+            </div>
+
+            <div class="medical-info">
+                <h2>Medical Information</h2>
+                <div class="info-row">
+                    <div class="info-label">Blood Type:</div>
+                    <div class="info-value" id="blood-type">-</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Diabetes:</div>
+                    <div class="info-value" id="diabetes">
+                        <span class="status-badge status-false">Not Detected</span>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Asthma:</div>
+                    <div class="info-value" id="asthma">
+                        <span class="status-badge status-false">Not Affected</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAh-gSCmFv3N61kanmqHiiO62BuVhaNElY",
+            authDomain: "test-exe-54f88.firebaseapp.com",
+            projectId: "test-exe-54f88",
+            storageBucket: "test-exe-54f88.firebasestorage.app",
+            messagingSenderId: "995451039078",
+            appId: "1:995451039078:web:e4a398327935960bcf6ca7",
+            measurementId: "G-G1RKZTR3RX"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        const patientIdEl = document.getElementById('patient-id');
+        const fullNameEl = document.getElementById('full-name');
+        const emailEl = document.getElementById('email');
+        const phoneEl = document.getElementById('phone');
+        const nationalIdEl = document.getElementById('national-id');
+        const genderEl = document.getElementById('gender');
+        const addressEl = document.getElementById('address');
+        const bloodTypeEl = document.getElementById('blood-type');
+        const diabetesEl = document.getElementById('diabetes');
+        const asthmaEl = document.getElementById('asthma');
+        const searchInput = document.getElementById('patient-search');
+
+        function updateStatusBadge(element, value) {
+            const badge = element.querySelector('.status-badge');
+            if (value) {
+                badge.textContent = 'Affected';
+                badge.className = 'status-badge status-true';
+            } else {
+                badge.textContent = 'Not Affected';
+                badge.className = 'status-badge status-false';
+            }
+        }
+
+        function displayPatientData(userData, medicalData) {
+            patientIdEl.textContent = userData.id || '-';
+            fullNameEl.textContent = userData.fullName || '-';
+            emailEl.textContent = userData.email || '-';
+            phoneEl.textContent = userData.phoneNumber || '-';
+            nationalIdEl.textContent = userData.nationalID || '-';
+            genderEl.textContent = userData.gender || '-';
+            addressEl.textContent = userData.address || '-';
+            bloodTypeEl.textContent = medicalData.bloodType || '-';
+            updateStatusBadge(diabetesEl, medicalData.hasDiabetes);
+            updateStatusBadge(asthmaEl, medicalData.hasAsthma);
+        }
+
+        function updateURLWithID(id) {
+            const url = new URL(window.location);
+            url.searchParams.set("id", id);
+            window.history.pushState({}, "", url);
+        }
+
+        async function searchPatients(query, updateURL = true) {
+            try {
+                if (query.length >= 20) {
+                    const userDoc = await db.collection('users').doc(query).get();
+                    if (userDoc.exists) {
+                        const medicalDoc = await db.collection('medical_info').doc(query).get();
+                        displayPatientData({
+                            id: userDoc.id,
+                            ...userDoc.data()
+                        }, medicalDoc.exists ? medicalDoc.data() : {});
+                        if (updateURL) updateURLWithID(userDoc.id);
+                        return;
+                    }
+                }
+
+                const usersSnapshot = await db.collection('users')
+                    .where('fullName', '>=', query)
+                    .where('fullName', '<=', query + '\uf8ff')
+                    .limit(1)
+                    .get();
+
+                if (!usersSnapshot.empty) {
+                    const userDoc = usersSnapshot.docs[0];
+                    const medicalDoc = await db.collection('medical_info').doc(userDoc.id).get();
+                    displayPatientData({
+                        id: userDoc.id,
+                        ...userDoc.data()
+                    }, medicalDoc.exists ? medicalDoc.data() : {});
+                    if (updateURL) updateURLWithID(userDoc.id);
+                    return;
+                }
+
+                const phoneSnapshot = await db.collection('users')
+                    .where('phoneNumber', '==', query)
+                    .limit(1)
+                    .get();
+
+                if (!phoneSnapshot.empty) {
+                    const userDoc = phoneSnapshot.docs[0];
+                    const medicalDoc = await db.collection('medical_info').doc(userDoc.id).get();
+                    displayPatientData({
+                        id: userDoc.id,
+                        ...userDoc.data()
+                    }, medicalDoc.exists ? medicalDoc.data() : {});
+                    if (updateURL) updateURLWithID(userDoc.id);
+                    return;
+                }
+
+                const idSnapshot = await db.collection('users')
+                    .where('nationalID', '==', query)
+                    .limit(1)
+                    .get();
+
+                if (!idSnapshot.empty) {
+                    const userDoc = idSnapshot.docs[0];
+                    const medicalDoc = await db.collection('medical_info').doc(userDoc.id).get();
+                    displayPatientData({
+                        id: userDoc.id,
+                        ...userDoc.data()
+                    }, medicalDoc.exists ? medicalDoc.data() : {});
+                    if (updateURL) updateURLWithID(userDoc.id);
+                    return;
+                }
+
+                alert('No patient found matching your search');
+            } catch (error) {
+                console.error("Error searching patients:", error);
+                alert("Error searching patients: " + error.message);
+            }
+        }
+
+        searchInput.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') {
+                const query = searchInput.value.trim();
+                if (query) {
+                    searchPatients(query);
+                }
+            }
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const id = params.get("id");
+            if (id) {
+                searchInput.value = id;
+                searchPatients(id, false);
+            } else {
+                displayPatientData({}, {});
+            }
+        });
+    </script>
+</body>
+
+</html>
