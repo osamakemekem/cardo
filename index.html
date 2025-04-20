@@ -137,10 +137,10 @@
         <div class="info-section">
             <div class="personal-info">
                 <h2>Personal Information</h2>
-                <div class="info-row">
+                <!-- <div class="info-row">
                     <div class="info-label">Patient ID:</div>
                     <div class="info-value" id="patient-id">-</div>
-                </div>
+                </div> -->
                 <div class="info-row">
                     <div class="info-label">Full Name:</div>
                     <div class="info-value" id="full-name">-</div>
@@ -203,7 +203,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        const patientIdEl = document.getElementById('patient-id');
+        // const patientIdEl = document.getElementById('patient-id');
         const fullNameEl = document.getElementById('full-name');
         const emailEl = document.getElementById('email');
         const phoneEl = document.getElementById('phone');
@@ -227,7 +227,7 @@
         }
 
         function displayPatientData(userData, medicalData) {
-            patientIdEl.textContent = userData.id || '-';
+            // patientIdEl.textContent = userData.id || '-';
             fullNameEl.textContent = userData.fullName || '-';
             emailEl.textContent = userData.email || '-';
             phoneEl.textContent = userData.phoneNumber || '-';
