@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Medical Records System</title>
+    <title>CardoCare | Medical Profile</title>
     <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
     <style>
@@ -108,11 +108,16 @@
             font-size: 16px;
         }
 
-        .loading {
-            text-align: center;
-            padding: 20px;
-            font-style: italic;
-            color: var(--gray);
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            font-weight: bold;
+            color: var(--primary);
         }
 
         @media (max-width: 600px) {
@@ -125,22 +130,21 @@
 </head>
 
 <body>
+    <div id="loader" class="loading-overlay">Loading Patient Data...</div>
+
     <div class="container">
         <header>
             <h1>CardoCare</h1>
+            <p id="profile-status" style="font-size: 0.8em; opacity: 0.8;">Medical Encryption System</p>
         </header>
 
-        <div class="search-container" style="display: none;">
-            <input type="text" class="search-input" id="patient-search" placeholder="Search by ID, name, phone or national ID...">
+        <div class="search-container">
+            <input type="text" class="search-input" id="patient-search" placeholder="Search by ID, name, or phone...">
         </div>
 
         <div class="info-section">
             <div class="personal-info">
                 <h2>Personal Information</h2>
-                <!-- <div class="info-row">
-                    <div class="info-label">Patient ID:</div>
-                    <div class="info-value" id="patient-id">-</div>
-                </div> -->
                 <div class="info-row">
                     <div class="info-label">Full Name:</div>
                     <div class="info-value" id="full-name">-</div>
@@ -203,7 +207,6 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // const patientIdEl = document.getElementById('patient-id');
         const fullNameEl = document.getElementById('full-name');
         const emailEl = document.getElementById('email');
         const phoneEl = document.getElementById('phone');
@@ -214,10 +217,11 @@
         const diabetesEl = document.getElementById('diabetes');
         const asthmaEl = document.getElementById('asthma');
         const searchInput = document.getElementById('patient-search');
+        const loader = document.getElementById('loader');
 
         function updateStatusBadge(element, value) {
             const badge = element.querySelector('.status-badge');
-            if (value) {
+            if (value === true || value === "true" || value === "Affected") {
                 badge.textContent = 'Affected';
                 badge.className = 'status-badge status-true';
             } else {
@@ -227,8 +231,7 @@
         }
 
         function displayPatientData(userData, medicalData) {
-            // patientIdEl.textContent = userData.id || '-';
-            fullNameEl.textContent = userData.fullName || '-';
+            fullNameEl.textContent = userData.fullName || userData.name || '-';
             emailEl.textContent = userData.email || '-';
             phoneEl.textContent = userData.phoneNumber || '-';
             nationalIdEl.textContent = userData.nationalID || '-';
@@ -239,89 +242,68 @@
             updateStatusBadge(asthmaEl, medicalData.hasAsthma);
         }
 
-        function updateURLWithID(id) {
-            const url = new URL(window.location);
-            url.searchParams.set("id", id);
-            window.history.pushState({}, "", url);
+        async function fetchFullProfile(patientId) {
+            const userDoc = await db.collection('users').doc(patientId).get();
+            if (userDoc.exists) {
+                const medicalDoc = await db.collection('medical_info').doc(patientId).get();
+                displayPatientData(userDoc.data(), medicalDoc.exists ? medicalDoc.data() : {});
+                return true;
+            }
+            return false;
         }
 
-        async function searchPatients(query, updateURL = true) {
+        async function searchPatients(query) {
+            loader.style.display = 'flex';
             try {
-                if (query.length >= 20) {
-                    const userDoc = await db.collection('users').doc(query).get();
-                    if (userDoc.exists) {
+                // 1. محاولة البحث المباشر عن الـ ID (سواء كان ID مريض أو UID كارت)
+                const docRef = db.collection('users').doc(query);
+                const docSnap = await docRef.get();
+
+                if (docSnap.exists) {
+                    const data = docSnap.data();
+                    
+                    // إذا كان المستند عبارة عن "ربط" (NFC Mapping)
+                    if (data.type === 'nfc_mapping' && data.linkedUser) {
+                        console.log("Mapping detected, fetching actual user:", data.linkedUser);
+                        const found = await fetchFullProfile(data.linkedUser);
+                        if (found) {
+                            loader.style.display = 'none';
+                            return;
+                        }
+                    } else {
+                        // إذا كان مستند مريض مباشر
+                        displayPatientData(data, {}); // سيتم تحديث المعلومات الطبية لاحقاً
                         const medicalDoc = await db.collection('medical_info').doc(query).get();
-                        displayPatientData({
-                            id: userDoc.id,
-                            ...userDoc.data()
-                        }, medicalDoc.exists ? medicalDoc.data() : {});
-                        if (updateURL) updateURLWithID(userDoc.id);
+                        if (medicalDoc.exists) displayPatientData(data, medicalDoc.data());
+                        loader.style.display = 'none';
                         return;
                     }
                 }
 
+                // 2. البحث بالاسم إذا لم نجد ID
                 const usersSnapshot = await db.collection('users')
                     .where('fullName', '>=', query)
                     .where('fullName', '<=', query + '\uf8ff')
-                    .limit(1)
-                    .get();
+                    .limit(1).get();
 
                 if (!usersSnapshot.empty) {
-                    const userDoc = usersSnapshot.docs[0];
-                    const medicalDoc = await db.collection('medical_info').doc(userDoc.id).get();
-                    displayPatientData({
-                        id: userDoc.id,
-                        ...userDoc.data()
-                    }, medicalDoc.exists ? medicalDoc.data() : {});
-                    if (updateURL) updateURLWithID(userDoc.id);
-                    return;
+                    await fetchFullProfile(usersSnapshot.docs[0].id);
+                } else {
+                    alert('No patient found matching this ID or Name');
+                    displayPatientData({}, {});
                 }
-
-                const phoneSnapshot = await db.collection('users')
-                    .where('phoneNumber', '==', query)
-                    .limit(1)
-                    .get();
-
-                if (!phoneSnapshot.empty) {
-                    const userDoc = phoneSnapshot.docs[0];
-                    const medicalDoc = await db.collection('medical_info').doc(userDoc.id).get();
-                    displayPatientData({
-                        id: userDoc.id,
-                        ...userDoc.data()
-                    }, medicalDoc.exists ? medicalDoc.data() : {});
-                    if (updateURL) updateURLWithID(userDoc.id);
-                    return;
-                }
-
-                const idSnapshot = await db.collection('users')
-                    .where('nationalID', '==', query)
-                    .limit(1)
-                    .get();
-
-                if (!idSnapshot.empty) {
-                    const userDoc = idSnapshot.docs[0];
-                    const medicalDoc = await db.collection('medical_info').doc(userDoc.id).get();
-                    displayPatientData({
-                        id: userDoc.id,
-                        ...userDoc.data()
-                    }, medicalDoc.exists ? medicalDoc.data() : {});
-                    if (updateURL) updateURLWithID(userDoc.id);
-                    return;
-                }
-
-                alert('No patient found matching your search');
             } catch (error) {
-                console.error("Error searching patients:", error);
-                alert("Error searching patients: " + error.message);
+                console.error("Search Error:", error);
+                alert("Error connecting to database");
+            } finally {
+                loader.style.display = 'none';
             }
         }
 
         searchInput.addEventListener('keyup', (e) => {
             if (e.key === 'Enter') {
                 const query = searchInput.value.trim();
-                if (query) {
-                    searchPatients(query);
-                }
+                if (query) searchPatients(query);
             }
         });
 
@@ -330,12 +312,9 @@
             const id = params.get("id");
             if (id) {
                 searchInput.value = id;
-                searchPatients(id, false);
-            } else {
-                displayPatientData({}, {});
+                searchPatients(id);
             }
         });
     </script>
 </body>
-
 </html>
